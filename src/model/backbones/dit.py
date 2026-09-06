@@ -76,8 +76,8 @@ class GlobalTimbreMemory(nn.Module):
 class TemporalTimbreEncoder(nn.Module):
     """Temporal Timbre Encoder (TVT processing block)
     Frame-level content vectors serve as Query in Multi-Head Cross-Attention with GTM.
-    The resulting time-varying timbre features are fused with the global speaker embedding
-    via gated Slerp, preserving the unit hypersphere geometry of the speaker embedding.
+    The resulting time-varying timbre features act as frame-level conditioning, combined
+    with the global speaker embedding at the input.
     """
     def __init__(self, content_dim=256, hidden_dim=256, attn_dim=128, num_heads=4):
         super().__init__()

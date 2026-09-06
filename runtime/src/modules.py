@@ -212,7 +212,6 @@ class BlockAttnProcessor:
     - Past chunks: up to `t_p` previous chunks
     - Future chunk: first `t_f` blocks of the next chunk
 
-    Inference mode uses left-looking causal mask only (no future).
     KV-cache stores all past keys/values; new KV is trimmed by block_size.
     """
 

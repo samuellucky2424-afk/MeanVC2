@@ -1,12 +1,13 @@
 
 <div align="center">
 
-<h1>🎤 MeanVC2: Robust Low-Latency Streaming Zero-Shot Voice Conversion</h1>
+<h1> MeanVC2: Robust Low-Latency Streaming Zero-Shot Voice Conversion</h1>
 
 
 ![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 ![License](https://img.shields.io/badge/License-Apache%202.0-blue)
 
+[![arXiv](https://img.shields.io/badge/arXiv-2606.09050-B31B1B?logo=arxiv&logoColor=white)](https://arxiv.org/abs/2606.09050)
 [![GitHub](https://img.shields.io/badge/GitHub-MeanVC2-181717?logo=github&logoColor=white)](https://github.com/ASLP-lab/MeanVC2)
 [![Demo Page](https://img.shields.io/badge/GitHub-Demo--Page-8A2BE2?logo=github&logoColor=white&labelColor=181717)](https://aslp-lab.github.io/MeanVC2/)
 [![HuggingFace Model](https://img.shields.io/badge/🤗%20HuggingFace-Model-FF9D00)](https://huggingface.co/ASLP-lab/MeanVC2)

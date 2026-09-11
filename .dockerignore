@@ -1,0 +1,26 @@
+.git
+.github
+__pycache__/
+*.py[cod]
+*.so
+*.dylib
+*.dll
+*.log
+*.zip
+*.tar
+*.tar.gz
+*.7z
+.env
+.venv/
+venv/
+wandb/
+output/
+outputs/
+cache/
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+# Checkpoints are downloaded reproducibly in the Dockerfile.
+ckpts/
+preprocess/ckpts/

@@ -1,0 +1,14 @@
+# MeanVC2 runtime only. The Docker worker does not install the repository's
+# training/evaluation stack.
+numpy>=1.26,<2.1
+einops==0.8.0
+x-transformers==2.2.11
+soundfile>=0.12
+s3prl>=0.4
+omegaconf>=2.3
+safetensors>=0.4.5
+huggingface-hub>=0.25
+
+# RunPod load-balanced API
+fastapi>=0.116,<1.0
+uvicorn[standard]>=0.35,<1.0

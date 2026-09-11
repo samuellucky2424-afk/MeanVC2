@@ -213,7 +213,9 @@ class VCRunner:
             self.encoder_output_cache = bn[:, -1:, :]
 
             # 4x interpolate → vc_chunk+1 frames, drop first (same as original)
-            vc_chunk = 16
+            # One VC frame represents 10 ms (160 samples). Keep feature time
+            # aligned when the server supplies an 80 ms block instead of 160 ms.
+            vc_chunk = len(samples) // 160
             if bn.shape[1] >= 2:
                 bn_up = bn.transpose(1, 2)
                 bn_up = F.interpolate(bn_up, size=vc_chunk + 1,

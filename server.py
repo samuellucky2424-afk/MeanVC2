@@ -97,10 +97,8 @@ class ServerVCRunner(run_rt.VCRunner):
 
         self.chunk_size = 12 if model == "120ms" else 4
         self.block_size = 4
-        # The upstream real-time driver currently feeds 2560-sample (160 ms)
-        # input blocks even for the 40ms model. Keep that behavior for a
-        # correct first deployment; we can reduce transport buffering later.
-        self.CHUNK = 2560
+        # The 40+40 model uses 80 ms ASR windows; feed one window per call.
+        self.CHUNK = 1280 if model == "40ms" else 2560
 
         self.vocoder_overlap = 2
         self.upsample_factor = 160
@@ -194,8 +192,9 @@ async def info():
         "sample_rate": 16000,
         "input_format": "pcm_s16le_mono",
         "output_format": "pcm_s16le_mono",
-        "upstream_input_block_samples": 2560,
-        "upstream_input_block_ms": 160,
+        "model_window_ms": 80 if MODEL_NAME == "40ms" else 160,
+        "upstream_input_block_samples": 1280 if MODEL_NAME == "40ms" else 2560,
+        "upstream_input_block_ms": 80 if MODEL_NAME == "40ms" else 160,
         "concurrency_per_worker": 1,
     }
 

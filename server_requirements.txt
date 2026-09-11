@@ -1,5 +1,8 @@
 # MeanVC2 runtime only. The Docker worker does not install the repository's
 # training/evaluation stack.
+torch==2.7.1
+torchaudio==2.7.1
+torchvision==0.22.1
 numpy>=1.26,<2.1
 einops==0.8.0
 x-transformers==2.2.11

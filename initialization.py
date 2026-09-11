@@ -13,6 +13,7 @@ Usage:
 import argparse
 import os
 import shutil
+from pathlib import Path
 
 from huggingface_hub import hf_hub_download
 
@@ -29,7 +30,7 @@ ASR_FILES = [
 
 # Speaker embedding: WavLM + ECAPA-TDNN
 # These are existing public models — NOT in our HF repo.
-# wavlm_large.pt          → Microsoft WavLM-Large (public)
+# wavlm_large.pt          → WavLM-Large from s3prl's pinned checkpoint mirror
 # wavlm_large_cfg.pt      → extracted from wavlm_large.pt (tiny config, ~10 KB)
 # wavlm_large_finetune.pth → Google Drive (ECAPA-TDNN fine-tuned weights)
 SPK_FILES = [
@@ -63,68 +64,76 @@ TASK_FILES = {
 # WavLM download (existing public models, NOT in our HF repo)
 # ---------------------------------------------------------------------------
 
-WAVLM_LARGE_URL = (
-    "https://github.com/microsoft/unilm/releases/download/wavlm/WavLM-Large.pt"
-)
+# Same source used by s3prl.upstream.wavlm.hubconf.wavlm_large.
+# Pin both the repository revision and file digest for reproducible builds.
+WAVLM_REPO = "s3prl/converted_ckpts"
+WAVLM_REVISION = "8cad0b370e7e35f8d56951d95d2be036ea85510c"
+WAVLM_SHA256 = "6fb4b3c3e6aa567f0a997b30855859cb81528ee8078802af439f7b2da0bf100f"
+WAVLM_CFG_PATH = "preprocess/ckpts/wavlm_large_cfg.pt"
+WAVLM_FINETUNED_PATH = "preprocess/ckpts/wavlm_large_finetune.pth"
+WAVLM_FINETUNED_URL = "https://drive.google.com/file/d/1-aE1NfzpRCLxA4GUxX9ITI3F9LlbtEGP/view"
 
-WAVLM_FINETUNED_URL = (
-    "https://drive.google.com/file/d/1-aE1NfzpRCLxA4GUxX9ITI3F9LlbtEGP/view"
-)
+
+def _validate_wavlm_config(cfg):
+    # A base/small config would build a different speaker encoder.
+    if not isinstance(cfg, dict) or any(
+        cfg.get(key) != value for key, value in {
+            "encoder_layers": 24,
+            "encoder_embed_dim": 1024,
+            "encoder_attention_heads": 16,
+        }.items()
+    ):
+        raise ValueError("Expected the WavLM Large configuration dictionary")
+    return cfg
 
 
 def _download_wavlm():
-    """
-    Download wavlm_large.pt from Microsoft's public release and extract
-    wavlm_large_cfg.pt from it.  For wavlm_large_finetune.pth, print the
-    Google Drive link (can't be auto-downloaded).
-    """
-    import urllib.request
+    """Prepare the required speaker config; any failure must fail the build."""
+    import hashlib
+    import torch
 
-    wavlm_path = "preprocess/ckpts/wavlm_large.pt"
-    cfg_path = "preprocess/ckpts/wavlm_large_cfg.pt"
-    finetuned_path = "preprocess/ckpts/wavlm_large_finetune.pth"
+    cfg_path = Path(WAVLM_CFG_PATH)
+    if cfg_path.is_file():
+        _validate_wavlm_config(torch.load(cfg_path, map_location="cpu", weights_only=True))
+        print(f"  [verified] {cfg_path}")
+        return
 
-    # --- wavlm_large.pt ---
-    if not os.path.exists(wavlm_path):
-        print("  [download] wavlm_large.pt from Microsoft WavLM-Large public release ...")
-        try:
-            os.makedirs("preprocess/ckpts", exist_ok=True)
-            urllib.request.urlretrieve(WAVLM_LARGE_URL, wavlm_path)
-            print(f"  [done]  {wavlm_path}")
-        except Exception as e:
-            print(f"  [warn]  auto-download failed: {e}")
-            print(f"  [manual] Download WavLM-Large.pt from:")
-            print(f"          {WAVLM_LARGE_URL}")
-            print(f"          and save as {wavlm_path}")
-            return  # can't extract cfg without the base model
-    else:
-        print(f"  [skip]  {wavlm_path}")
+    print("  [download] pinned WavLM Large checkpoint for config extraction ...")
+    checkpoint_path = hf_hub_download(
+        repo_id=WAVLM_REPO, filename="wavlm_large.pt", revision=WAVLM_REVISION,
+    )
+    digest = hashlib.sha256()
+    with open(checkpoint_path, "rb") as source:
+        for block in iter(lambda: source.read(1024 * 1024), b""):
+            digest.update(block)
+    if digest.hexdigest() != WAVLM_SHA256:
+        raise ValueError("WavLM Large checkpoint SHA256 mismatch")
 
-    # --- wavlm_large_cfg.pt (extract from wavlm_large.pt) ---
-    if not os.path.exists(cfg_path):
-        print("  [extract] wavlm_large_cfg.pt from wavlm_large.pt ...")
-        try:
-            checkpoint = __import__("torch").load(wavlm_path, map_location="cpu")
-            cfg_dict = checkpoint.get("cfg", checkpoint.get("config"))
-            if cfg_dict is None:
-                print("  [warn]  could not find 'cfg' key in wavlm_large.pt")
-            else:
-                os.makedirs("preprocess/ckpts", exist_ok=True)
-                __import__("torch").save(cfg_dict, cfg_path)
-                print(f"  [done]  {cfg_path}")
-        except Exception as e:
-            print(f"  [warn]  config extraction failed: {e}")
-            print(f"  [manual] Extract the 'cfg' key from wavlm_large.pt and save as {cfg_path}")
-    else:
-        print(f"  [skip]  {cfg_path}")
+    checkpoint = torch.load(checkpoint_path, map_location="cpu", weights_only=True)
+    cfg = _validate_wavlm_config(checkpoint.get("cfg", checkpoint.get("config")))
+    cfg_path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = cfg_path.with_suffix(".tmp")
+    try:
+        torch.save(cfg, temporary)
+        _validate_wavlm_config(torch.load(temporary, map_location="cpu", weights_only=True))
+        os.replace(temporary, cfg_path)
+    finally:
+        temporary.unlink(missing_ok=True)
+    print(f"  [done] {cfg_path}")
 
-    # --- wavlm_large_finetune.pth ---
-    if not os.path.exists(finetuned_path):
-        print(f"  [manual] wavlm_large_finetune.pth must be downloaded from Google Drive:")
-        print(f"          {WAVLM_FINETUNED_URL}")
-        print(f"          and saved as {finetuned_path}")
-    else:
-        print(f"  [skip]  {finetuned_path}")
+
+def verify_files(task: str):
+    """Fail before publishing an image with absent checkpoints or invalid config."""
+    import torch
+
+    required = [path for _, path in TASK_FILES[task]] + [
+        WAVLM_CFG_PATH, WAVLM_FINETUNED_PATH,
+    ]
+    missing = [path for path in required if not Path(path).is_file() or Path(path).stat().st_size == 0]
+    if missing:
+        raise FileNotFoundError("Missing required checkpoints: " + ", ".join(missing))
+    _validate_wavlm_config(torch.load(WAVLM_CFG_PATH, map_location="cpu", weights_only=True))
+    print(f"  [verified] {len(required)} required checkpoint files for {task}")
 
 
 # ---------------------------------------------------------------------------
@@ -154,6 +163,8 @@ def download_files(task: str):
     # WavLM (existing public models, from external sources)
     _download_wavlm()
 
+    verify_files(task)
+
     # FunASR note
     if task != "preprocess":
         print("\nNote: FunASR models (Paraformer, VAD, punctuation) auto-download from ModelScope at first use.")
@@ -175,5 +186,9 @@ if __name__ == "__main__":
              "'train_40ms' adds 40ms VC model + vocoder; "
              "'all' for everything",
     )
+    parser.add_argument("--verify-only", action="store_true", help="Check packaged files without downloading")
     args = parser.parse_args()
-    download_files(args.task)
+    if args.verify_only:
+        verify_files(args.task)
+    else:
+        download_files(args.task)

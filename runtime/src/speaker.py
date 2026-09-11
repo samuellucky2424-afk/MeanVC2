@@ -169,7 +169,7 @@ class ECAPA_TDNN(nn.Module):
                 from s3prl.upstream.wavlm.expert import UpstreamExpert
                 from s3prl.upstream.interfaces import UpstreamBase
 
-                cfg_dict = torch.load(config_path, map_location='cpu')
+                cfg_dict = torch.load(config_path, map_location='cpu', weights_only=True)
                 cfg = WavLMConfig(cfg_dict)
                 wavlm = WavLM(cfg)
                 wavlm.feature_grad_mult = 0.0

@@ -2,7 +2,9 @@ FROM pytorch/pytorch:2.5.1-cuda12.1-cudnn9-runtime
 
 ARG DEBIAN_FRONTEND=noninteractive
 ARG MEANVC_INIT_TASK=train_40ms
-ARG WAVLM_FINETUNE_URL=https://drive.google.com/file/d/1-aE1NfzpRCLxA4GUxX9ITI3F9LlbtEGP/view
+ARG WAVLM_FINETUNE_REPO=lmzjms/wavlm-large
+ARG WAVLM_FINETUNE_FILENAME=wavlm_large_finetune.pth
+ARG WAVLM_FINETUNE_SHA256=51f07e3b94d9e0262a6a675ef5a087be3dd09e8c62e9d886827f44f82fe7f94b
 
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
@@ -25,18 +27,19 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         sox \
     && rm -rf /var/lib/apt/lists/*
 
-# Install only the packages required by the real-time inference/server path.
+# Install only packages needed by the real-time inference/server path.
 # PyTorch 2.5.1 + CUDA 12.1 already come from the base image.
 COPY server_requirements.txt ./
 RUN python -m pip install --upgrade pip setuptools wheel \
     && python -m pip install -r server_requirements.txt
 
-# MeanVC2's upstream initialization script cannot automatically fetch the
-# fine-tuned WavLM/ECAPA speaker checkpoint. Fetch it explicitly, then let the
-# official script download the ASR, 40ms VC and Vocos checkpoints.
+# MeanVC2 upstream leaves the fine-tuned WavLM/ECAPA checkpoint as a manual
+# Google Drive download. Google Drive is unreliable in unattended Docker
+# builds, so fetch a public Hugging Face mirror and verify the known SHA256.
 COPY initialization.py ./
 RUN mkdir -p preprocess/ckpts \
-    && gdown --fuzzy "${WAVLM_FINETUNE_URL}" -O preprocess/ckpts/wavlm_large_finetune.pth \
+    && python -c "from huggingface_hub import hf_hub_download; import shutil; p=hf_hub_download(repo_id='${WAVLM_FINETUNE_REPO}', filename='${WAVLM_FINETUNE_FILENAME}'); shutil.copy2(p, 'preprocess/ckpts/wavlm_large_finetune.pth')" \
+    && echo "${WAVLM_FINETUNE_SHA256}  preprocess/ckpts/wavlm_large_finetune.pth" | sha256sum -c - \
     && python initialization.py --task "${MEANVC_INIT_TASK}" \
     && rm -f preprocess/ckpts/wavlm_large.pt \
     && rm -rf /root/.cache/huggingface /root/.cache/torch

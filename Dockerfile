@@ -25,25 +25,25 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         sox \
     && rm -rf /var/lib/apt/lists/*
 
-# Keep dependency/model layers above the application source so ordinary code
-# changes do not force RunPod to redownload all model weights on every build.
-COPY requirements.txt server_requirements.txt ./
+# Install only the packages required by the real-time inference/server path.
+# PyTorch 2.5.1 + CUDA 12.1 already come from the base image.
+COPY server_requirements.txt ./
 RUN python -m pip install --upgrade pip setuptools wheel \
-    && python -m pip install -r requirements.txt \
     && python -m pip install -r server_requirements.txt
 
 # MeanVC2's upstream initialization script cannot automatically fetch the
 # fine-tuned WavLM/ECAPA speaker checkpoint. Fetch it explicitly, then let the
-# official script download the ASR, VC and Vocos checkpoints.
+# official script download the ASR, 40ms VC and Vocos checkpoints.
 COPY initialization.py ./
 RUN mkdir -p preprocess/ckpts \
     && gdown --fuzzy "${WAVLM_FINETUNE_URL}" -O preprocess/ckpts/wavlm_large_finetune.pth \
     && python initialization.py --task "${MEANVC_INIT_TASK}" \
-    # The 1.2 GB WavLM base checkpoint is only needed to extract cfg; runtime
-    # reconstructs WavLM from wavlm_large_cfg.pt + the fine-tuned checkpoint.
     && rm -f preprocess/ckpts/wavlm_large.pt \
     && rm -rf /root/.cache/huggingface /root/.cache/torch
 
+# The WavLM base file above is only needed during build to extract
+# preprocess/ckpts/wavlm_large_cfg.pt. Runtime rebuilds WavLM from that config
+# and the fine-tuned checkpoint, so removing the base file saves ~1.2 GB.
 COPY . .
 RUN mkdir -p /app/voices
 
